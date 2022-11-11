@@ -33,8 +33,8 @@ func ReadConfig(configPath string) (*DBconfig, error) {
 	return config, nil
 }
 
-func dbCreateArticle(artice Article) error {
-	query, err := db.Prepare("insert into articles{title, content} values (?,?)")
+func dbCreateArticle(artice *Article) error {
+	query, err := db.Prepare(`insert into articles(title,content) values ($1,$2);`)
 	defer query.Close()
 
 	if err != nil {
@@ -50,7 +50,7 @@ func dbCreateArticle(artice Article) error {
 }
 
 func getAllArticles() ([]*Article, error) {
-	query, err := db.Prepare("select id, title, content from articles")
+	query, err := db.Prepare("select id, title, content from articles;")
 	defer query.Close()
 
 	if err != nil {
@@ -70,18 +70,45 @@ func getAllArticles() ([]*Article, error) {
 }
 
 func getArticle(articleId string) (*Article, error) {
-	query, err := db.Prepare("select id, title, content from articles where id = ?")
+	query, err := db.Prepare("select id, title, content from articles where id = $1")
 	defer query.Close()
 	if err != nil {
 		return nil, err
 	}
-	result, err := query.Query()
+	result := query.QueryRow(articleId)
 	data := new(Article)
 	err = result.Scan(&data.ID, &data.Title, &data.Content)
 	if err != nil {
 		return nil, err
 	}
 	return data, nil
+}
+
+func updateArticle(articleId string, article *Article) error {
+	query, err := db.Prepare("update articles set (title, content) = ($1,$2) where id=$3")
+	defer query.Close()
+
+	if err != nil {
+		return err
+	}
+	_, err = query.Exec(article.Title, article.Content, article.ID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func deleteArticle(articleId string) error {
+	query, err := db.Prepare("delete from articles where id=$1")
+	if err != nil {
+		return err
+	}
+	_, err = query.Exec(articleId)
+
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func connect() (*sql.DB, error) {
@@ -100,7 +127,7 @@ func connect() (*sql.DB, error) {
 		return nil, err
 	}
 	sqlStmt1 := `
-  create table if not exists articles (id integer not null primary key autoincrement, title text, content text);
+    create table if not exists articles (id serial primary key, title text, content text);
   `
 	_, err = db.Exec(sqlStmt1)
 	if err != nil {
